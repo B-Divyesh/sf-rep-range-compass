@@ -1,0 +1,30 @@
+{
+  "slug": "rep-range-compass",
+  "title": "Rep Range Compass",
+  "territory": "utilities",
+  "user": "A strength trainee using double progression who needs to know the next set's target and whether a weight increase is earned, without moving their health history to a hosted service.",
+  "evidence": [
+    {
+      "url": "https://hn.algolia.com/api/v1/items/43034329",
+      "date": "2025-02-13",
+      "quote_or_summary": "In the self-hosted workout-tracker discussion, users call out missing Apple Health import, unclear current-set position, and incomplete mobile workflow."
+    },
+    {
+      "url": "https://github.com/wger-project/wger/issues/2480",
+      "date": "2026-08-13",
+      "quote_or_summary": "A user explains that common 3×8–12 double progression cannot be represented because a weight increase fires after the bottom of the range rather than all sets reaching the top."
+    }
+  ],
+  "recurrence": "Two independent fitness-tracker communities identify the same high-frequency moment: recording a set while deciding whether to progress. It occurs every workout for lifters using rep ranges.",
+  "current_workaround": "Use a full workout tracker plus a notes field, spreadsheet, or mental arithmetic to remember rep-range state.",
+  "incumbents_and_gap": "wger, Hevy, Strong, and Ryot record workouts, but their broad programs obscure the narrow next-set/next-weight decision and can require an account or server.",
+  "smallest_useful_product": "Offline PWA with one exercise card: log weight/reps/RIR, apply a configurable rep-range rule, show the next-set cue and export/import CSV. Non-goals: exercise library, social feed, coaching, nutrition, or medical metrics.",
+  "success_measure": "In a four-week pilot, 70% of users log at least eight sessions and can answer 'increase or repeat?' without a separate note in 90% of logged exercises.",
+  "artifact_class": "pwa-offline",
+  "monetization": "one-time — a focused personal log should keep data local and not make training history contingent on a subscription.",
+  "constraints": "All data stays in IndexedDB by default; CSV import must be local; clearly state that progression suggestions are configurable arithmetic, not coaching or medical advice.",
+  "est_build_effort": "S",
+  "why_distinct": "It is a progression decision card, not another full workout catalogue or AI fitness coach.",
+  "confidence": 4,
+  "state": "BUILT"
+}

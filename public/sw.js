@@ -2,7 +2,7 @@ const CACHE_NAME = 'rep-range-compass-v1';
 const BUILD_ASSETS = "__BUILD_ASSETS__";
 const VERSIONED_ASSETS = Array.isArray(BUILD_ASSETS) ? BUILD_ASSETS : [];
 const APP_SHELL = [
-  '/', '/index.html', '/offline.html', '/privacy/', '/terms/', '/manifest.webmanifest',
+  '/', '/index.html', '/offline.html', '/privacy/', '/terms/', '/manifest.webmanifest', '/robots.txt',
   '/assets/icon-192.png', '/assets/icon-512.png', '/assets/icon-maskable-512.png',
   '/assets/progression-landscape-640.avif', '/assets/progression-landscape-1280.avif',
   '/assets/progression-landscape-640.webp', '/assets/progression-landscape-1280.webp', '/assets/progression-landscape-1280.jpg',

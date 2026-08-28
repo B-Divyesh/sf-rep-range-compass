@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rep-range-compass.sociobot.in/sitemap.xml
