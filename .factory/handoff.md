@@ -1,5 +1,7 @@
 # Rep Range Compass — build handoff
 
+> **RELEASE STATUS: FAIL (independent verification, 2026-08-28).** Do not release candidate `11c9603b446aa76300b10075a54ac887c8fbcd8f` unchanged. The deployed URL is an exact candidate match, but the in-app service-worker update notice fails and CSV import accepts impossible training data. See [`.factory/verification.md`](verification.md) for reproduction and full evidence.
+
 Date: 2026-08-28
 
 Work order: `rep-range-compass-build-1`
@@ -19,7 +21,7 @@ Artifact: offline-first static PWA
 - Dedicated `/privacy/` and `/terms/` pages, MIT license, expanded README, robots/sitemap, and product brief.
 - Product-specific luminous-glass visual system, responsive original landscape art, reduced-motion fallback, and documented provenance in `.factory/design.md`.
 
-## Verification
+## Builder-reported verification (superseded by independent verification below)
 
 Run from a clean checkout:
 
@@ -52,3 +54,14 @@ Training data remains in browser IndexedDB. License token/verdict data remains i
 ## Recommended next step
 
 Register the Sociobot product, run one test purchase through the factory’s staging checkout, confirm license restore on a second browser, then deploy `dist/` unchanged.
+
+## Independent verification — 2026-08-28
+
+**FAIL.** A clean detached checkout of `11c9603b446aa76300b10075a54ac887c8fbcd8f` passed `npm ci`, `npm test`, and `npm run build`; the live site matched every tested candidate artifact byte-for-byte. Core logging, progression arithmetic, local persistence, offline reload, keyboard focus, 390px layout, no serious/critical axe findings, first-party-only initial requests, and bundle budgets passed.
+
+Release is blocked by two P1 defects:
+
+- A changed service worker becomes `waiting: "installed"`, but the required update-available toast remains hidden in the open app.
+- CSV import accepts and persists impossible values, including negative reps, RIR 99, set number 0, and a negative rep minimum.
+
+The live hashed JS/CSS cache for only 30 seconds and lacks CSP/Permissions-Policy; record these deployment P2s with the repair. Full command output, exact reproduction, and evidence are in [`.factory/verification.md`](verification.md).
