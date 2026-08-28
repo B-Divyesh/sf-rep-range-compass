@@ -37,9 +37,12 @@ Open the local URL printed by Vite. No backend or environment variables are requ
 npm test       # unit + Chromium end-to-end, accessibility, mobile, and offline checks
 npm run build  # exact production build command; output is dist/
 npm run preview
+npm run verify:live-billing # production checkout + verification rate-limit contract
 ```
 
 Playwright is pinned to `1.58.2`. The factory image includes its Chromium browser; elsewhere, run `npx playwright install chromium` once if needed.
+
+`verify:live-billing` makes requests to the production Sociobot API and is intentionally separate from the deterministic local test gate. It expects checkout to redirect to the hosted payment page and an 80-request verification burst to produce HTTP 429 responses with `Retry-After`.
 
 The static deployment root is `dist/`, with `dist/index.html` at its root. Vite copies `/privacy`, `/terms`, the manifest, icons, offline fallback, and service worker into the build. A build hook injects hashed JS/CSS names into the service-worker precache list.
 
