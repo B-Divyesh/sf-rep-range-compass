@@ -14,6 +14,8 @@ let lastResult: Session | null = null;
 let message = '';
 let license: LicenseState = { unlocked: false, checking: false, notice: '' };
 let persistenceQueue = Promise.resolve();
+let pendingServiceWorker: ServiceWorker | null = null;
+let refreshingForUpdate = false;
 
 const escapeHtml = (value: unknown) => String(value)
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
@@ -151,13 +153,13 @@ function render(): void {
       </section>
       <section class="workbench shell" id="compass" aria-label="Progression compass">
         <div class="storage-alert ${storageHealthy ? 'hidden' : ''}" role="alert"><strong>Local storage is unavailable.</strong> You can continue in this tab, but export before closing it.</div>
-        <div class="compass-grid">${currentCue()}<aside class="side-stack" aria-label="Progression setup">${settingsPanel()}<div class="principle"><span aria-hidden="true">≠</span><p><strong>Arithmetic, not coaching.</strong> This tool applies the rule you set. It is not medical advice and cannot judge technique, fatigue, pain, or readiness.</p></div></aside></div>
+        <div class="compass-grid">${currentCue()}<div class="side-stack">${settingsPanel()}<div class="principle"><span aria-hidden="true">≠</span><p><strong>Arithmetic, not coaching.</strong> This tool applies the rule you set. It is not medical advice and cannot judge technique, fatigue, pain, or readiness.</p></div></div></div>
       </section>
       <div class="shell">${historySection()}${dataAndLicense()}</div>
     </main>
     <footer><div class="shell footer-inner"><div>${compassMark()}<p><strong>Rep Range Compass</strong><br/>Private by default. Useful offline.</p></div><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav><p class="provenance">Landscape artwork was generated for this product with Azure OpenAI. No tracking, no account.</p></div></footer>
     <div id="announcer" class="visually-hidden" aria-live="polite">${escapeHtml(message)}</div><div id="feedback" class="feedback ${message ? '' : 'hidden'}" role="status">${escapeHtml(message)}</div>
-    <div id="update-toast" class="toast hidden" role="status"><span>An app update is ready.</span><button id="apply-update" type="button">Refresh now</button></div>`;
+    <div id="update-toast" class="toast ${pendingServiceWorker ? '' : 'hidden'}" role="status"><span>An app update is ready.</span><button id="apply-update" type="button">Refresh now</button></div>`;
   bindEvents();
 }
 
@@ -166,6 +168,12 @@ function readNumber(data: FormData, name: string): number {
 }
 
 function bindEvents(): void {
+  document.querySelector<HTMLButtonElement>('#apply-update')?.addEventListener('click', () => {
+    if (!pendingServiceWorker) return;
+    refreshingForUpdate = true;
+    pendingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+  });
+
   document.querySelector<HTMLFormElement>('#log-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
@@ -262,19 +270,19 @@ function registerServiceWorker(): void {
   const register = async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
-      let refreshing = false;
-      const showUpdate = () => {
+      const showUpdate = (worker: ServiceWorker) => {
+        pendingServiceWorker = worker;
         document.querySelector('#update-toast')?.classList.remove('hidden');
-        document.querySelector('#apply-update')?.addEventListener('click', () => {
-          refreshing = true;
-          registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
-        });
       };
-      if (registration.waiting) showUpdate();
-      registration.addEventListener('updatefound', () => registration.installing?.addEventListener('statechange', () => {
-        if (registration.installing?.state === 'installed' && navigator.serviceWorker.controller) showUpdate();
-      }));
-      navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing) location.reload(); });
+      if (registration.waiting) showUpdate(registration.waiting);
+      registration.addEventListener('updatefound', () => {
+        const installingWorker = registration.installing;
+        if (!installingWorker) return;
+        installingWorker.addEventListener('statechange', () => {
+          if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) showUpdate(installingWorker);
+        });
+      });
+      navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshingForUpdate) location.reload(); });
     } catch { announce('Offline installation is unavailable in this browser.'); }
   };
   if (document.readyState === 'complete') void register();

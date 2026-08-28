@@ -3,7 +3,7 @@
   "short_name": "Rep Compass",
   "description": "Private, offline double-progression decisions between sets.",
   "id": "/?source=pwa",
-  "start_url": "/?v=1",
+  "start_url": "/?v=2",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

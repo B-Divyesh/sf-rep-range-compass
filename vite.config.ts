@@ -8,10 +8,10 @@ function injectServiceWorkerAssets(): Plugin {
     apply: 'build',
     async closeBundle() {
       const dist = resolve('dist');
-      const assets = await readdir(resolve(dist, 'assets'));
+      const assets = await readdir(resolve(dist, 'immutable'));
       const hashed = assets
         .filter((file) => /\.(js|css)$/.test(file))
-        .map((file) => `/assets/${file}`);
+        .map((file) => `/immutable/${file}`);
       const swPath = resolve(dist, 'sw.js');
       const source = await readFile(swPath, 'utf8');
       await writeFile(swPath, source.replace('"__BUILD_ASSETS__"', JSON.stringify(hashed)));
@@ -22,7 +22,8 @@ function injectServiceWorkerAssets(): Plugin {
 export default defineConfig({
   build: {
     target: 'es2022',
-    sourcemap: true
+    sourcemap: true,
+    assetsDir: 'immutable'
   },
   plugins: [injectServiceWorkerAssets()]
 });
