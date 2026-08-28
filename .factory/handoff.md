@@ -1,113 +1,46 @@
-# Rep Range Compass — repair handoff
+# Rep Range Compass — independent QA handoff
 
-**Release status: PASS**
+**Release status: FAIL**
 
-- Work order: `rep-range-compass-repair-1`
-- Date: 2026-08-28
-- Repaired verifier report: `ac6d9f811cc7b8b461ededef49f1df3333e6f809`
-- Failed candidate: `11c9603b446aa76300b10075a54ac887c8fbcd8f`
-- Repair commits: `2a07489`, `3fd6fbb`
-- Artifact: offline-first static PWA (`dist/`)
-- Live: <https://rep-range-compass.sociobot.in/>
+- Work order: `rep-range-compass-verify-2`
+- Date: 2026-08-28 UTC
+- Candidate: `0d4ec4b068abe09e5aeba90c7a2509e0245540f7`
+- Live URL: <https://rep-range-compass.sociobot.in/>
+- Full evidence: [`.factory/verification-2.md`](verification-2.md)
 
-## Repairs
+## Blocking findings
 
-### P1 — service-worker update notice
+1. **P1 — checkout is unavailable.** The app’s production Sociobot checkout link returns HTTP 404 with `{"error":"enabled factory product","status":404}`. Users cannot buy the advertised $12 unlock.
+2. **P1 — offline license bypass.** With no cached valid verdict, entering any fabricated token while offline stores it and shows “Compass Plus active” plus “This device is unlocked.”
+3. **P1 — no required API rate limit.** Two bursts totaling 300 verification requests returned 300 HTTP 200 responses in 0.642 s and 1.623 s. No 429 or `Retry-After` was observed; the threshold was not reached.
+4. **P2 — 200% text overflow.** At 390 px, the page widens from 390 to 413 px because the footer does not reflow.
+5. **P2 — undersized mobile link targets.** The brand link is 42 px high; inline and footer legal links are only 15–19 px high.
 
-The update listener now captures the installing `ServiceWorker` before `registration.installing` can be cleared, keeps that worker as durable UI state across renders, and sends `SKIP_WAITING` to that exact worker. `controllerchange` reloads only after the user chooses “Refresh now.” The app shell/cache and manifest start URL were advanced to v2.
+## What passed
 
-Exact regression coverage changes the served `dist/sw.js`, calls `registration.update()`, waits for the replacement worker to reach `installed`, verifies that “An app update is ready.” is visible in the already-open app, selects “Refresh now,” then verifies `active: "activated"` and `waiting: null` after reload.
+- Clean SHA and remote identity confirmed; only this QA documentation is changed.
+- `npm ci`: 60 packages audited, zero vulnerabilities.
+- `npm test`: 18 unit and 7 Chromium E2E tests passed, including malicious CSV rejection, worker update toast/application, keyboard, mobile axe, legal pages, and offline reload.
+- `npm run build`: exact `tsc -b && vite build` passed and produced `dist/`.
+- Progression increase/repeat, total-rep and RIR rules, numeric/input boundaries, persistence, discard/clear confirmation, local CSV round-trip, atomic invalid import, and free export beyond the five-row paid UI cap passed.
+- Live/local controlled offline reload passed. Live worker is activated with cache `rep-range-compass-v2`; the manifest parses with no errors and declared icon sizes are correct.
+- axe found zero violations on desktop, mobile, privacy, terms, and offline pages. Keyboard focus and reduced-motion behavior passed. Console/page errors were empty.
+- Privacy behavior passed: first load was first-party only, training data stayed in IndexedDB, CSV processing stayed local, and only an explicitly supplied license token contacted Sociobot.
+- Lighthouse mobile: local 94/100/100/100 and live 98/100/100/100 (performance/accessibility/best practices/SEO); live LCP 1.3 s and CLS 0.
+- Bundles: JS 26,406 bytes raw / 9,575 gzip; CSS 12,687 raw / 3,743 gzip; mobile AVIF 6,897 bytes.
+- All 21 served production files matched local `dist/` byte-for-byte. Root/SW SHA-256: `27314519…` / `427d2869…`.
+- Live security and caching policies passed: HTTPS redirect, HSTS, CSP, Permissions-Policy, frame denial, nosniff, immutable hashed assets, and `no-cache` worker.
 
-### P1 — impossible CSV data
-
-CSV import now validates every row before any IndexedDB transaction. It enforces:
-
-- set numbers: integer 1–10, unique, consecutive, and starting at 1;
-- reps: integer 0–100; RIR: integer 0–10;
-- weight: 0–9999 and next weight: 0–10998, both with at most two decimals;
-- rep minimum/maximum: integer UI bounds with maximum greater than minimum;
-- non-empty bounded identity/exercise fields and valid chronological timestamps;
-- matching session metadata across all rows;
-- repeat/increase and next-weight consistency;
-- every set reaching the top for an `all-top` increase.
-
-The verifier’s exact malicious row is covered in both unit and file-picker browser tests. The browser test confirms the error is announced, history remains at zero, and IndexedDB contains no session.
-
-### P2/P3 follow-ups
-
-- Vite fingerprinted JS/CSS now build under `/immutable/`; Azure Static Web Apps serves that route as `public, max-age=31536000, immutable` while `sw.js` is `no-cache`.
-- Checked-in deployment policy adds a restrictive CSP, least-privilege Permissions-Policy, nosniff, referrer policy, frame denial, and removes the host’s obsolete `X-XSS-Protection` header.
-- Legal and offline fallback styles were externalized so every page works under the CSP.
-- The nested complementary landmark was changed from an unnecessary `aside` to a neutral layout element. Full axe scans now report zero findings.
-
-## Verification evidence
-
-Clean dependency/install gate:
+## How to reproduce
 
 ```sh
 npm ci
-# 59 packages installed, 60 audited, 0 vulnerabilities
-```
-
-Automated and production gates:
-
-```sh
 npm test
-# 18 unit tests passed; 7 Chromium end-to-end tests passed
-
 npm run build
-# TypeScript build and Vite production build passed; dist/index.html present
 ```
 
-There is no separate lint script; strict TypeScript checking runs in `npm run build`. Package/consumer testing is not applicable to this static PWA.
+For the production failures, request the checkout URL, submit a new token while offline after service-worker control, and burst the verify endpoint with an invalid token plus `Origin: https://rep-range-compass.sociobot.in`. For the layout issue, use a 390 px viewport and enlarge root text to 200%; measure `document.documentElement.scrollWidth` (413) versus `clientWidth` (390).
 
-Production bundle sizes:
+## Next steps
 
-- Initial JS: 26,406 bytes raw / 9.56 KB gzip (budget: 200 KB).
-- CSS: 12,687 bytes raw / 3.74 KB gzip (budget: 50 KB).
-- 640px AVIF hero: 6,897 bytes (budget: 300 KB).
-- No webfonts or runtime CDN assets.
-
-Browser and accessibility:
-
-- Chromium desktop 1366×900 and mobile 390×844: no horizontal overflow or hidden controls; screenshots reviewed.
-- Full axe scans: zero violations at both desktop and mobile sizes, including removal of the verifier’s moderate landmark finding.
-- Keyboard: first Tab reaches the skip link; Enter logs a set; Space opens rule settings; focus rings remain visible.
-- Local and live URL audits: title, `lang="en"`, one h1, main landmark, image alt, and zero console/page errors passed.
-- First-load request capture remained first-party only.
-- Reduced-motion behavior and original single-dark visual thesis are unchanged.
-
-PWA and offline:
-
-- Exact open-app worker-update regression passed, including toast, `SKIP_WAITING`, activation, and reload.
-- Controlled offline reload passed locally and live at both 1366×900 and 390×844; the compass and “Offline · saved locally” state remained visible.
-- IndexedDB session/draft persistence and local-only CSV behavior passed.
-
-Lighthouse 12.8.2, local production build, mobile profile:
-
-- Performance 100; Accessibility 100; Best Practices 100; SEO 100.
-- FCP 1.0 s; LCP 1.4 s; total blocking time 30 ms; CLS 0.
-
-## Deployment and live identity
-
-Deployed with:
-
-```sh
-/opt/fleet/lib/deploy-static.sh rep-range-compass dist
-```
-
-- Azure Static Web Apps production deployment: `c28b36a0-ad70-4101-8f4f-04a153c951ef` (Succeeded).
-- Custom domain returned HTTPS 200.
-- All 20 deployable files compared byte-for-byte with local `dist/`; no mismatches.
-- `index.html` SHA-256: `27314519fcea8988b832716941aad65ecd477aad3509e056daaef9eae8c05786` locally and live.
-- `sw.js` SHA-256: `427d2869c1e8217b145c73f69d28157ca720827fc55d48a4760ff69c68d24475` locally and live.
-- Live fingerprinted JS returns `Cache-Control: public, max-age=31536000, immutable`.
-- Live `sw.js` returns `Cache-Control: no-cache`.
-- Live root includes CSP and Permissions-Policy; the obsolete `X-XSS-Protection` header is absent.
-
-## Known external follow-ups
-
-- The factory still needs to exercise a real Compass Plus purchase/refund after confirming the registered Sociobot billing product and $12 price. No billing secret or direct payment-provider code belongs in this repository.
-- The brief’s four-week retention measure requires a user pilot and cannot be established by release verification.
-
-No release-blocking product, accessibility, privacy, offline/update, performance, response-policy, or identity gaps remain from the independent report.
+Enable the Sociobot product, require a cached valid verdict for offline Plus access, rate-limit verification with 429/`Retry-After`, and repair the 200% footer reflow and sub-44px link targets. Then redeploy and repeat independent QA. A real four-week pilot remains necessary to measure the brief’s retention goal.
