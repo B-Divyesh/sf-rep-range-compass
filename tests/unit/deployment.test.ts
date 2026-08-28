@@ -11,6 +11,7 @@ describe('static response policy', () => {
     expect(config.globalHeaders['Content-Security-Policy']).toContain("default-src 'self'");
     expect(config.globalHeaders['Content-Security-Policy']).toContain("frame-ancestors 'none'");
     expect(config.globalHeaders['Permissions-Policy']).toContain('camera=()');
+    expect(config.globalHeaders['X-XSS-Protection']).toBe('');
   });
 
   it('gives only fingerprinted build assets a long-lived immutable policy', () => {
