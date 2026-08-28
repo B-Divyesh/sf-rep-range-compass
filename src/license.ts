@@ -60,7 +60,10 @@ export async function initializeLicense(onChange: (state: LicenseState) => void)
   const token = initialToken();
   const cache = readCache();
   let state: LicenseState = {
-    unlocked: Boolean(token && (cache?.valid || !cache)),
+    // Offline optimism is only safe after this device has cached a valid
+    // verification. Possessing an arbitrary, never-verified string is not an
+    // unlock signal.
+    unlocked: Boolean(token && cache?.valid),
     checking: Boolean(token),
     notice: token ? 'Checking your Compass Plus license…' : ''
   };
@@ -74,9 +77,11 @@ export async function initializeLicense(onChange: (state: LicenseState) => void)
     state = { unlocked: verdict.valid, checking: false, notice: verdict.valid ? 'Compass Plus is active on this device.' : 'License no longer active.' };
   } catch {
     state = {
-      unlocked: cache?.valid ?? true,
+      unlocked: cache?.valid ?? false,
       checking: false,
-      notice: 'Offline: using the last license state. We’ll check again later.'
+      notice: cache?.valid
+        ? 'Offline: using the last verified license state. We’ll check again later.'
+        : 'Could not verify this license. Compass Plus stays locked until this device reconnects.'
     };
   }
   return state;
@@ -90,6 +95,6 @@ export async function restoreLicense(token: string): Promise<LicenseState> {
     const verdict = await requestVerdict(trimmed);
     return { unlocked: verdict.valid, checking: false, notice: verdict.valid ? 'Compass Plus restored.' : 'That license is not active for this product.' };
   } catch {
-    return { unlocked: true, checking: false, notice: 'Could not verify while offline. Saved for the next connection.' };
+    return { unlocked: false, checking: false, notice: 'Could not verify this license. Compass Plus stays locked; reconnect and restore it again.' };
   }
 }

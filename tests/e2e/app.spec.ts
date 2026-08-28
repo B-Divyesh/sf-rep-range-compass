@@ -45,6 +45,67 @@ test('has no accessibility violations and fits a 390px viewport', async ({ brows
   await page.close();
 });
 
+test('reflows at 200% text and keeps every mobile link target at least 44px', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.goto('/');
+  await page.locator('details').filter({ hasText: 'One-time unlock' }).locator('summary').click();
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+
+  const width = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    client: document.documentElement.clientWidth
+  }));
+  expect(width.scroll).toBeLessThanOrEqual(width.client);
+
+  const undersizedLinks = await page.locator('a:visible').evaluateAll((links) => links
+    .map((link) => {
+      const box = link.getBoundingClientRect();
+      return { label: link.getAttribute('aria-label') ?? link.textContent?.trim() ?? '', width: box.width, height: box.height };
+    })
+    .filter(({ width, height }) => width < 44 || height < 44));
+  expect(undersizedLinks).toEqual([]);
+  await page.close();
+});
+
+test('keeps a cached valid license available without another verification request', async ({ browser }) => {
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    localStorage.setItem('sb_license:rep-range-compass', 'previously-verified-license');
+    localStorage.setItem('sb_license:rep-range-compass:verdict', JSON.stringify({ valid: true, reason: 'ok', checkedAt: Date.now() }));
+  });
+  const page = await context.newPage();
+  const verificationRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/verify?license=')) verificationRequests.push(request.url());
+  });
+  await page.goto('/');
+  await expect(page.locator('details').filter({ hasText: 'One-time unlock' }).locator('summary')).toContainText('Compass Plus active');
+  expect(verificationRequests).toEqual([]);
+  await context.close();
+});
+
+test('keeps a never-verified restored license locked when verification is offline', async ({ context, page }) => {
+  await page.goto('/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await context.setOffline(true);
+
+  const unlock = page.locator('details').filter({ hasText: 'One-time unlock' });
+  await unlock.locator('summary').click();
+  await page.getByLabel('Have a license? Paste it here').fill('not-a-real-license');
+  await page.getByRole('button', { name: 'Restore' }).click();
+
+  await expect(page.getByText(/Compass Plus stays locked/)).toBeAttached();
+  await expect(page.getByText('✓ This device is unlocked.')).toHaveCount(0);
+  await expect(unlock.locator('summary')).toContainText('Compass Plus · $12 once');
+  const stored = await page.evaluate(() => ({
+    token: localStorage.getItem('sb_license:rep-range-compass'),
+    verdict: localStorage.getItem('sb_license:rep-range-compass:verdict')
+  }));
+  expect(stored).toEqual({ token: 'not-a-real-license', verdict: null });
+  await context.setOffline(false);
+});
+
 test('rejects the verifier CSV before writing any session', async ({ page }) => {
   await page.goto('/');
   const invalid = `session_id,exercise,started_at,completed_at,weight,unit,set_number,reps,rir,rep_min,rep_max,rule,decision,next_weight
