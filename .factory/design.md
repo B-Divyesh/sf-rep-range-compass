@@ -63,6 +63,7 @@ The palette comes from oxidized steel, rubber plates, mint display phosphor, and
 - Creation date: 2026-08-28.
 - License/provenance: original AI-generated artwork commissioned for this product; no supplied reference image and no depicted person or brand.
 - Production derivatives: responsive WebP files at 640px and 1280px wide, each kept below 300 KB. Source is retained with a JSON prompt sidecar.
+- Social derivative: `public/assets/social-card.jpg` is a hand-cropped 1200×630 derivative of the approved landscape, made on 2026-09-06. It contains no text and is used only for Open Graph/Twitter previews.
 
 Prompt sheet:
 
@@ -74,4 +75,3 @@ Review criteria: no text artifacts, logos, pseudo-brands, people/anatomy, or mis
 
 - Compass mark and app icons are original geometric SVG/PNG derivatives built from a north notch, plate ring, and three rep ticks. They use the product tokens and contain no third-party marks.
 - All interface icons are inline, hand-authored SVG with accessible text labels on their controls.
-

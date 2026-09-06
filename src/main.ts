@@ -1,11 +1,18 @@
 import './styles.css';
 import { exportCsv, importCsv } from './csv';
-import { storage } from './db';
+import { createStorage, storage } from './db';
 import { completeSession, decideProgression, suggestedWeight } from './progression';
-import { buyUrl, initializeLicense, restoreLicense, type LicenseState } from './license';
+import { buyUrl, configureLicense, initializeLicense, restoreLicense, type LicenseState } from './license';
 import { defaultSettings, type DraftSession, type Session, type Settings } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
+const pageUrl = new URL(location.href);
+const isDemo = pageUrl.pathname === '/demo' || pageUrl.searchParams.get('demo') === '1';
+const freshDemo = pageUrl.searchParams.get('fresh') === '1';
+const demoStorage = createStorage('demo:rep-range-compass');
+const activeStorage = isDemo ? demoStorage : storage;
+configureLicense(isDemo ? 'demo:' : '');
+document.title = isDemo ? 'Demo — Rep Range Compass' : 'Rep Range Compass — repeat or increase';
 let settings: Settings = { ...defaultSettings };
 let draft: DraftSession | null = null;
 let sessions: Session[] = [];
@@ -16,6 +23,58 @@ let license: LicenseState = { unlocked: false, checking: false, notice: '' };
 let persistenceQueue = Promise.resolve();
 let pendingServiceWorker: ServiceWorker | null = null;
 let refreshingForUpdate = false;
+
+function sampleSessions(): Session[] {
+  const completed = (daysAgo: number, weight: number, reps: number[], decision: Session['decision'], nextWeight: number): Session => {
+    const finished = new Date(Date.now() - daysAgo * 86_400_000);
+    const started = new Date(finished.getTime() - 22 * 60_000).toISOString();
+    return {
+      id: `demo-bench-${daysAgo}`,
+      exercise: 'Barbell bench press',
+      startedAt: started,
+      completedAt: finished.toISOString(),
+      weight,
+      unit: 'kg',
+      repMin: 8,
+      repMax: 12,
+      rule: 'all-top',
+      decision,
+      nextWeight,
+      sets: reps.map((repsForSet, index) => ({ reps: repsForSet, rir: 2, loggedAt: new Date(finished.getTime() - (reps.length - index) * 75_000).toISOString() }))
+    };
+  };
+  return [
+    completed(1, 40, [12, 12, 12], 'increase', 42.5),
+    completed(4, 40, [12, 11, 12], 'repeat', 40),
+    completed(7, 40, [11, 11, 10], 'repeat', 40),
+    completed(10, 37.5, [12, 12, 12], 'increase', 40),
+    completed(13, 37.5, [12, 12, 11], 'repeat', 37.5),
+    completed(16, 37.5, [12, 12, 12], 'increase', 40)
+  ];
+}
+
+const demoSettings: Settings = {
+  exercise: 'Barbell bench press',
+  unit: 'kg',
+  setCount: 3,
+  repMin: 8,
+  repMax: 12,
+  increment: 2.5,
+  startWeight: 40,
+  rule: 'all-top',
+  totalTarget: 36,
+  rirFloor: 2
+};
+
+async function resetDemo(): Promise<void> {
+  await demoStorage.clearAll();
+  settings = { ...demoSettings };
+  draft = null;
+  sessions = sampleSessions();
+  lastResult = sessions[0];
+  await demoStorage.setSettings(settings);
+  await demoStorage.putSessions(sessions);
+}
 
 const escapeHtml = (value: unknown) => String(value)
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
@@ -133,7 +192,7 @@ function dataAndLicense(): string {
     </details>
     <details class="glass-section"><summary><span><span class="eyebrow">One-time unlock</span><strong>${license.unlocked ? 'Compass Plus active' : 'Compass Plus · $12 once'}</strong></span><span class="summary-action">${license.unlocked ? 'Active' : 'View'}</span></summary>
       <div class="upgrade-copy">
-        <p>The free compass includes logging, progression rules, offline use, and unlimited CSV export. Plus unlocks your full on-screen history and future convenience views for a one-time $12 purchase.</p>
+        <p>The free compass logs sets, applies your rule, works offline, and exports CSV. Plus shows all past sessions on this device for $12 once.</p>
         <p class="license-notice" role="status">${escapeHtml(license.notice)}</p>
         ${license.unlocked ? '<p class="success-line">✓ This device is unlocked.</p>' : `<a class="primary link-button" href="${buyUrl}">Buy Compass Plus</a>`}
         <form id="license-form" class="license-form"><label for="license-token">Have a license? Paste it here</label><div><input id="license-token" name="license" type="password" autocomplete="off" required /><button class="secondary" type="submit">Restore</button></div></form>
@@ -143,21 +202,38 @@ function dataAndLicense(): string {
   </div>`;
 }
 
+function demoBanner(): string {
+  if (!isDemo) return '';
+  return `<div class="demo-banner" role="status"><div class="shell demo-banner-inner"><p><strong>Demo — sample data, nothing is saved</strong><span> Barbell bench press, six recent sessions, and the next weight are ready.</span></p><div><button id="reset-demo" class="secondary" type="button">Reset demo</button><a id="start-for-real" class="primary link-button" href="/">Start for real</a></div></div></div>`;
+}
+
+function howItWorks(): string {
+  return `<section class="how-it-works shell" aria-labelledby="how-title"><div><span class="eyebrow">How it works</span><h2 id="how-title">Log each set, then follow one result</h2></div><ol><li><strong>Set your rule.</strong><span>Choose a rep range, weight increase, and optional RIR floor.</span></li><li><strong>Log one set.</strong><span>Record weight, reps, and RIR while you train.</span></li><li><strong>Repeat or increase.</strong><span>After the last set, use the next-weight result for the next session.</span></li></ol></section>`;
+}
+
+function limitsAndPrivacy(): string {
+  return `<section class="limits shell" aria-labelledby="limits-title"><div><span class="eyebrow">Privacy and limits</span><h2 id="limits-title">Your log stays in this browser</h2></div><p>There is no account or tracker. Export CSV when you want a copy. The calculation follows your rule; it is not coaching or medical advice.</p></section>`;
+}
+
 function render(): void {
   const offline = !navigator.onLine;
-  app.innerHTML = `<header class="site-header"><div class="shell header-inner"><a class="brand" href="/" aria-label="Rep Range Compass home">${compassMark()}<span>Rep Range<br/><strong>Compass</strong></span></a><div class="network-status ${offline ? 'offline' : ''}"><span aria-hidden="true"></span>${offline ? 'Offline · saved locally' : 'Local-first'}</div></div></header>
-    <main id="main">
+  app.innerHTML = `<header class="site-header"><div class="shell header-inner"><a class="brand" href="/" aria-label="Rep Range Compass home">${compassMark()}<span>Rep Range<br/><strong>Compass</strong></span></a><nav class="site-nav" aria-label="Primary"><a href="/demo">Demo</a><a href="#compass">Log</a><a href="/privacy/">Privacy</a></nav><div class="network-status ${offline ? 'offline' : ''}"><span aria-hidden="true"></span>${offline ? 'Offline · saved locally' : 'Local-first'}</div></div></header>
+    ${demoBanner()}
+    <main id="main" tabindex="-1">
       <section class="hero shell">
-        <div class="hero-copy"><p class="kicker">Double progression, without the spreadsheet</p><h1>Know the next set.<br/><em>Earn the next weight.</em></h1><p class="lede">Log weight, reps, and RIR. Your rule gives one clear bearing: repeat or increase. Nothing leaves this device unless you export it.</p><a class="hero-jump" href="#compass">Open your compass <span aria-hidden="true">↓</span></a></div>
+        <div class="hero-copy"><p class="kicker">Rep Range Compass</p><h1>Decide whether to repeat or increase</h1><p class="lede">For strength trainees using double progression, each logged set shows the next target and next weight.</p><div class="hero-actions"><a class="primary link-button" href="/demo?fresh=1">Try it with sample data</a><p>See a finished 3 × 8–12 bench session and its next weight.</p></div><a class="hero-jump" href="#compass">Start an empty log <span aria-hidden="true">↓</span></a><ul class="hero-facts" aria-label="Product facts"><li><strong>Private</strong><span>Training data stays in this browser.</span></li><li><strong>Offline</strong><span>Works after your first visit.</span></li><li><strong>Price</strong><span>Free core; Plus is $12 once.</span></li></ul></div>
         <picture class="hero-art"><source type="image/avif" srcset="/assets/progression-landscape-640.avif 640w, /assets/progression-landscape-1280.avif 1280w" sizes="(max-width: 900px) 75vw, 760px"/><source type="image/webp" srcset="/assets/progression-landscape-640.webp 640w, /assets/progression-landscape-1280.webp 1280w" sizes="(max-width: 900px) 75vw, 760px"/><img src="/assets/progression-landscape-1280.jpg" width="1280" height="853" alt="Three translucent platforms ascend toward a small amber signal, representing completed rep targets." decoding="async" fetchpriority="high" /></picture>
       </section>
       <section class="workbench shell" id="compass" aria-label="Progression compass">
         <div class="storage-alert ${storageHealthy ? 'hidden' : ''}" role="alert"><strong>Local storage is unavailable.</strong> You can continue in this tab, but export before closing it.</div>
         <div class="compass-grid">${currentCue()}<div class="side-stack">${settingsPanel()}<div class="principle"><span aria-hidden="true">≠</span><p><strong>Arithmetic, not coaching.</strong> This tool applies the rule you set. It is not medical advice and cannot judge technique, fatigue, pain, or readiness.</p></div></div></div>
       </section>
-      <div class="shell">${historySection()}${dataAndLicense()}</div>
+      <div class="shell">${historySection()}</div>
+      ${howItWorks()}
+      ${limitsAndPrivacy()}
+      <div class="shell" id="plus">${dataAndLicense()}</div>
     </main>
-    <footer><div class="shell footer-inner"><div>${compassMark()}<p><strong>Rep Range Compass</strong><br/>Private by default. Useful offline.</p></div><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav><p class="provenance">Landscape artwork was generated for this product with Azure OpenAI. No tracking, no account.</p></div></footer>
+    <footer><div class="shell footer-inner"><div>${compassMark()}<p><strong>Rep Range Compass</strong><br/>Private logging for repeat-or-increase decisions.</p></div><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav><p class="provenance">Built by Param Factory · Build 1.1.0</p></div></footer>
     <div id="announcer" class="visually-hidden" aria-live="polite">${escapeHtml(message)}</div><div id="feedback" class="feedback ${message ? '' : 'hidden'}" role="status">${escapeHtml(message)}</div>
     <div id="update-toast" class="toast ${pendingServiceWorker ? '' : 'hidden'}" role="status"><span>An app update is ready.</span><button id="apply-update" type="button">Refresh now</button></div>`;
   bindEvents();
@@ -168,6 +244,18 @@ function readNumber(data: FormData, name: string): number {
 }
 
 function bindEvents(): void {
+  document.querySelector<HTMLButtonElement>('#reset-demo')?.addEventListener('click', async () => {
+    await resetDemo();
+    render();
+    announce('Demo reset. The sample log is ready again.');
+  });
+
+  document.querySelector<HTMLAnchorElement>('#start-for-real')?.addEventListener('click', async (event) => {
+    event.preventDefault();
+    await demoStorage.clearAll();
+    location.assign('/');
+  });
+
   document.querySelector<HTMLButtonElement>('#apply-update')?.addEventListener('click', () => {
     if (!pendingServiceWorker) return;
     refreshingForUpdate = true;
@@ -193,11 +281,11 @@ function bindEvents(): void {
       lastResult = completed;
       draft = null;
       message = completed.decision === 'increase' ? `Session complete. Increase to ${completed.nextWeight} ${completed.unit}.` : `Session complete. Repeat ${completed.weight} ${completed.unit}.`;
-      persistence = queueSave(async () => { await storage.putSession(completed); await storage.setDraft(null); });
+      persistence = queueSave(async () => { await activeStorage.putSession(completed); await activeStorage.setDraft(null); });
     } else {
       const currentDraft = draft;
       message = `Set ${currentDraft.sets.length} logged. Set ${currentDraft.sets.length + 1} is next.`;
-      persistence = queueSave(() => storage.setDraft(currentDraft));
+      persistence = queueSave(() => activeStorage.setDraft(currentDraft));
     }
     render();
     document.querySelector<HTMLInputElement>('#reps')?.focus();
@@ -207,7 +295,7 @@ function bindEvents(): void {
   document.querySelector<HTMLButtonElement>('#discard-session')?.addEventListener('click', async () => {
     if (!confirm(`Discard the ${draft?.sets.length ?? 0} logged set(s) in this unfinished session?`)) return;
     draft = null; lastResult = null;
-    await save(() => storage.setDraft(null));
+    await save(() => activeStorage.setDraft(null));
     render(); announce('Unfinished session discarded.');
   });
 
@@ -227,7 +315,7 @@ function bindEvents(): void {
       totalTarget: readNumber(data, 'totalTarget'), rirFloor: data.get('rirFloor') === '' ? null : readNumber(data, 'rirFloor')
     };
     draft = null; lastResult = null;
-    await save(async () => { await storage.setSettings(settings); await storage.setDraft(null); });
+    await save(async () => { await activeStorage.setSettings(settings); await activeStorage.setDraft(null); });
     render(); announce('Progression rule saved.');
   });
 
@@ -246,7 +334,7 @@ function bindEvents(): void {
       const merged = new Map(sessions.map((item) => [item.id, item]));
       imported.forEach((item) => merged.set(item.id, item));
       sessions = [...merged.values()].sort((a, b) => b.completedAt.localeCompare(a.completedAt));
-      await save(() => storage.putSessions(imported));
+      await save(() => activeStorage.putSessions(imported));
       render(); announce(`Imported ${imported.length} sessions. Existing matching sessions were updated.`);
     } catch (error) { announce(error instanceof Error ? error.message : 'The CSV could not be imported.'); }
     input.value = '';
@@ -255,7 +343,7 @@ function bindEvents(): void {
   document.querySelector<HTMLButtonElement>('#clear-data')?.addEventListener('click', async () => {
     if (!confirm(`Clear ${sessions.length} completed session(s), the current rule, and any unfinished set? Export first if you want a backup.`)) return;
     sessions = []; draft = null; settings = { ...defaultSettings }; lastResult = null;
-    await save(() => storage.clearAll()); render(); announce('All local training data was cleared.');
+    await save(() => activeStorage.clearAll()); render(); announce('All local training data was cleared.');
   });
 
   document.querySelector<HTMLFormElement>('#license-form')?.addEventListener('submit', async (event) => {
@@ -291,13 +379,26 @@ function registerServiceWorker(): void {
 
 async function start(): Promise<void> {
   try {
-    const [savedSettings, savedDraft, savedSessions] = await Promise.all([storage.getSettings(), storage.getDraft(), storage.getSessions()]);
-    settings = savedSettings ?? { ...defaultSettings }; draft = savedDraft ?? null; sessions = savedSessions;
+    const [savedSettings, savedDraft, savedSessions] = await Promise.all([activeStorage.getSettings(), activeStorage.getDraft(), activeStorage.getSessions()]);
+    if (isDemo && (freshDemo || !savedSettings || savedSessions.length === 0)) {
+      await resetDemo();
+      if (freshDemo) {
+        const cleanUrl = new URL(location.href);
+        cleanUrl.searchParams.delete('fresh');
+        history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+      }
+    } else {
+      settings = savedSettings ?? { ...defaultSettings };
+      draft = savedDraft ?? null;
+      sessions = savedSessions;
+      lastResult = isDemo ? sessions[0] ?? null : null;
+    }
   } catch { storageHealthy = false; }
   render();
   window.addEventListener('online', render); window.addEventListener('offline', render);
   license = await initializeLicense((state) => { license = state; render(); }); render();
   registerServiceWorker();
+  if (isDemo && !location.hash) requestAnimationFrame(() => document.querySelector('#compass')?.scrollIntoView({ block: 'start' }));
 }
 
 void start();

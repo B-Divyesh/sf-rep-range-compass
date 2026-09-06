@@ -1,0 +1,79 @@
+[
+  {
+    "id": "log-set",
+    "claim": "Logs weight, reps, and RIR for each set.",
+    "where": "Product card, README",
+    "test": "npm run test:claims -- --grep @claim:log-set",
+    "sandbox": "Fresh /demo; log a 42.5 kg set with 9 reps and 3 RIR, then observe the next-set progress."
+  },
+  {
+    "id": "progression-rules",
+    "claim": "Applies the all-sets-top or total-rep rule with an optional RIR floor.",
+    "where": "Rule settings, README",
+    "test": "npm run test:claims -- --grep @claim:progression-rules",
+    "sandbox": "Fresh /demo; observe a below-top repeat, then configure a 30-rep total and observe an increase."
+  },
+  {
+    "id": "local-persistence",
+    "claim": "Keeps a logged set in this browser after reload.",
+    "where": "Product card, README",
+    "test": "npm run test:claims -- --grep @claim:local-persistence",
+    "sandbox": "Fresh /demo; log a set, reload, and observe the persisted next-set position."
+  },
+  {
+    "id": "repeat-or-increase",
+    "claim": "Shows whether to repeat or increase and gives the next weight.",
+    "where": "Landing screen, completed-session result, README",
+    "test": "npm run test:claims -- --grep @claim:repeat-or-increase",
+    "sandbox": "Fresh /demo; complete an all-top session and a below-top session, then observe both outcomes."
+  },
+  {
+    "id": "csv-export",
+    "claim": "Exports the complete log as CSV.",
+    "where": "Local data panel, README",
+    "test": "npm run test:claims -- --grep @claim:csv-export",
+    "sandbox": "Fresh /demo; download CSV and verify its header and all 18 sample set rows."
+  },
+  {
+    "id": "csv-import-validation",
+    "claim": "Rejects invalid CSV before changing the log.",
+    "where": "Local data panel, README",
+    "test": "npm run test:claims -- --grep @claim:csv-import-validation",
+    "sandbox": "Fresh /demo; import an invalid row and verify the row error and unchanged six-session log."
+  },
+  {
+    "id": "pwa-shell",
+    "claim": "Provides an installable PWA shell that caches the demo route.",
+    "where": "README",
+    "test": "npm run test:claims -- --grep @claim:pwa-shell",
+    "sandbox": "Fresh /demo; verify the live manifest, active service worker, and cached demo route."
+  },
+  {
+    "id": "offline-reload",
+    "claim": "Works offline after the first visit.",
+    "where": "Landing facts, README",
+    "test": "npm run test:claims -- --grep @claim:offline-reload",
+    "sandbox": "Own fresh browser context; load /demo, wait for service worker, switch offline, then reload the populated demo."
+  },
+  {
+    "id": "local-only",
+    "claim": "Demo data is isolated from the real log, and no training data leaves the browser.",
+    "where": "Demo banner, landing facts, privacy page, README",
+    "test": "npm run test:claims -- --grep @claim:local-only",
+    "sandbox": "Create one real session, use and reset /demo, assert separate IndexedDB counts and only same-origin requests."
+  },
+  {
+    "id": "plus-scope",
+    "claim": "The free core stays available; Compass Plus costs $12 once and reveals all past sessions on a verified device.",
+    "where": "Unlock panel, terms, README",
+    "test": "npm run test:claims -- --grep @claim:plus-scope",
+    "sandbox": "Fresh /demo; observe five free rows and the $12 offer, mock a valid verification, then observe six rows."
+  },
+  {
+    "id": "returned-license",
+    "claim": "A returned license token is stored locally and verified at most once per day.",
+    "where": "README",
+    "test": "npm run test:claims -- --grep @claim:returned-license",
+    "sandbox": "Fresh /demo with a returned token and recorded valid billing response; reload and observe one verification request."
+  }
+]

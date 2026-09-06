@@ -1,8 +1,7 @@
 const SLUG = 'rep-range-compass';
-const TOKEN_KEY = `sb_license:${SLUG}`;
-const CACHE_KEY = `${TOKEN_KEY}:verdict`;
 const VERIFY_AFTER_MS = 24 * 60 * 60 * 1000;
 const BILLING_BASE = 'https://api.sociobot.in/api/v1';
+let storagePrefix = '';
 
 interface CachedVerdict {
   valid: boolean;
@@ -18,19 +17,32 @@ export interface LicenseState {
 
 export const buyUrl = `${BILLING_BASE}/products/${SLUG}/checkout`;
 
+function tokenKey(): string {
+  return `${storagePrefix}sb_license:${SLUG}`;
+}
+
+function cacheKey(): string {
+  return `${tokenKey()}:verdict`;
+}
+
+/** Keeps the demo's license state separate from a visitor's real license. */
+export function configureLicense(namespace = ''): void {
+  storagePrefix = namespace;
+}
+
 function readToken(): string | null {
-  try { return localStorage.getItem(TOKEN_KEY); }
+  try { return localStorage.getItem(tokenKey()); }
   catch { return null; }
 }
 
 function storeToken(token: string): void {
-  try { localStorage.setItem(TOKEN_KEY, token); localStorage.removeItem(CACHE_KEY); }
+  try { localStorage.setItem(tokenKey(), token); localStorage.removeItem(cacheKey()); }
   catch { /* The free experience still works when localStorage is disabled. */ }
 }
 
 function readCache(): CachedVerdict | null {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey());
     return raw ? JSON.parse(raw) as CachedVerdict : null;
   } catch { return null; }
 }
@@ -52,7 +64,7 @@ async function requestVerdict(token: string): Promise<CachedVerdict> {
   if (!response.ok) throw new Error('License verification is temporarily unavailable.');
   const body = await response.json() as { valid: boolean; reason: string };
   const verdict = { valid: body.valid === true, reason: body.reason, checkedAt: Date.now() };
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(verdict)); } catch { /* Cache is optional. */ }
+  try { localStorage.setItem(cacheKey(), JSON.stringify(verdict)); } catch { /* Cache is optional. */ }
   return verdict;
 }
 

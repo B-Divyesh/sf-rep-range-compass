@@ -10,6 +10,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run tests/unit",
     "test:e2e": "npm run build && playwright test",
+    "test:claims": "npm run build && playwright test",
     "verify:live-billing": "node tests/live/billing-contract.mjs"
   },
   "devDependencies": {

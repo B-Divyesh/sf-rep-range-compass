@@ -1,11 +1,10 @@
 import type { DraftSession, Session, Settings } from './types';
 
-const DB_NAME = 'rep-range-compass';
 const DB_VERSION = 1;
 
-function openDatabase(): Promise<IDBDatabase> {
+function openDatabase(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(name, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('sessions')) db.createObjectStore('sessions', { keyPath: 'id' });
@@ -16,8 +15,8 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-async function transact<T>(storeName: string, mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const db = await openDatabase();
+async function transact<T>(databaseName: string, storeName: string, mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const db = await openDatabase(databaseName);
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, mode);
     const request = work(transaction.objectStore(storeName));
@@ -28,20 +27,21 @@ async function transact<T>(storeName: string, mode: IDBTransactionMode, work: (s
   });
 }
 
-export const storage = {
-  getSettings: () => transact<Settings | undefined>('state', 'readonly', (store) => store.get('settings')),
-  setSettings: (value: Settings) => transact<IDBValidKey>('state', 'readwrite', (store) => store.put(value, 'settings')),
-  getDraft: () => transact<DraftSession | undefined>('state', 'readonly', (store) => store.get('draft')),
+export function createStorage(databaseName: string) {
+  return {
+  getSettings: () => transact<Settings | undefined>(databaseName, 'state', 'readonly', (store) => store.get('settings')),
+  setSettings: (value: Settings) => transact<IDBValidKey>(databaseName, 'state', 'readwrite', (store) => store.put(value, 'settings')),
+  getDraft: () => transact<DraftSession | undefined>(databaseName, 'state', 'readonly', (store) => store.get('draft')),
   setDraft: (value: DraftSession | null) => value
-    ? transact<IDBValidKey>('state', 'readwrite', (store) => store.put(value, 'draft'))
-    : transact<undefined>('state', 'readwrite', (store) => store.delete('draft')),
+    ? transact<IDBValidKey>(databaseName, 'state', 'readwrite', (store) => store.put(value, 'draft'))
+    : transact<undefined>(databaseName, 'state', 'readwrite', (store) => store.delete('draft')),
   getSessions: async (): Promise<Session[]> => {
-    const sessions = await transact<Session[]>('sessions', 'readonly', (store) => store.getAll());
+    const sessions = await transact<Session[]>(databaseName, 'sessions', 'readonly', (store) => store.getAll());
     return sessions.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   },
-  putSession: (value: Session) => transact<IDBValidKey>('sessions', 'readwrite', (store) => store.put(value)),
+  putSession: (value: Session) => transact<IDBValidKey>(databaseName, 'sessions', 'readwrite', (store) => store.put(value)),
   putSessions: async (values: Session[]) => {
-    const db = await openDatabase();
+    const db = await openDatabase(databaseName);
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction('sessions', 'readwrite');
       const store = transaction.objectStore('sessions');
@@ -52,7 +52,7 @@ export const storage = {
     db.close();
   },
   clearAll: async () => {
-    const db = await openDatabase();
+    const db = await openDatabase(databaseName);
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(['sessions', 'state'], 'readwrite');
       transaction.objectStore('sessions').clear();
@@ -62,4 +62,7 @@ export const storage = {
     });
     db.close();
   }
-};
+  };
+}
+
+export const storage = createStorage('rep-range-compass');
