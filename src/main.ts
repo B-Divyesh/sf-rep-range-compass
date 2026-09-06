@@ -67,6 +67,7 @@ const demoSettings: Settings = {
 };
 
 async function resetDemo(): Promise<void> {
+  await persistenceQueue;
   await demoStorage.clearAll();
   settings = { ...demoSettings };
   draft = null;
@@ -252,6 +253,7 @@ function bindEvents(): void {
 
   document.querySelector<HTMLAnchorElement>('#start-for-real')?.addEventListener('click', async (event) => {
     event.preventDefault();
+    await persistenceQueue;
     await demoStorage.clearAll();
     location.assign('/');
   });
